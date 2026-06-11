@@ -1,7 +1,7 @@
 # Predicting Cancer Occurrence
 
 # Definition of the Business Problem: Predicting the Occurrence of Breast Cancer
-# http://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Diagnostic%29
+# https://archive.ics.uci.edu/dataset/17/breast+cancer+wisconsin+diagnostic
 
 ## Step 1 - Collecting the Data
 
@@ -12,7 +12,6 @@
 # indicate benign.
 data <- read.csv("dataset.csv", stringsAsFactors = FALSE)
 str(data)
-View(data)
 
 ## Step 2 - Pre-Processing
 
@@ -44,7 +43,7 @@ summary(data[c("radius_mean", "area_mean", "smoothness_mean")])
 
 
 # Creating a normalization function
-## Note: This "normalize" function that was created is actually a standardization (to standardize the data)
+## Note: this min-max rescaling to the [0, 1] range is normalization (not standardization).
 
 normalizes <- function(x) {
   return ((x - min(x)) / (max(x) - min(x)))
@@ -59,9 +58,10 @@ data_norm <- as.data.frame(lapply(data[2:31], normalizes))
 # Loading the library package
 # install.packages("class")
 library(class)
-?knn
 
-# Creating training date and test date
+# Creating training data and test data
+# set.seed makes the random train/test split reproducible across runs.
+set.seed(42)
 sample_df <- sample(c(TRUE, FALSE), nrow(data_norm),replace = TRUE, prob = c(0.7, 0.3))
 
 training_data <- data_norm[sample_df,]
@@ -94,42 +94,46 @@ library(gmodels)
 CrossTable(x = testing_data_labels, y = model_knn_v1, prop.chisq = FALSE)
 
 # Interpreting the Results
-# The cross table shows 4 possible values, which represent the false/true positive and negative
-# We have two columns listing the original labels in the observed data
-# We have two lines listing test data labels
+# The cross table shows 4 cells, the false/true positive and negative counts.
+# Columns are the observed (true) labels; rows are the predicted labels.
+# Here "positive" means the disease (Malign) per the convention defined below.
 
-# We have:
-# Scenario 1: Benign (Observed) x Benign (Predicted) cell - 104 cases - true positive
-# Scenario 2: Malign Cell (Observed) x Benign (Predicted) - 00 cases - false positive (the model failed)
-# Scenario 3: Benign Cell (Observed) x Malign (Predicted) - 02 cases - false negative (the model failed)
-# Scenario 4: Malign Cell (Observed) x Malign (Predicted) - 54 cases - true negative
+# Programmatic accuracy (do not hard-code it: it must match the table above):
+accuracy_knn_v1 <- mean(model_knn_v1 == testing_data_labels)
+print(accuracy_knn_v1)
+
+# Mapping the four cells to the disease-positive convention (positive = Malign):
+# Scenario 1: Benign (Observed) x Benign (Predicted)  - true negative
+# Scenario 2: Malign (Observed) x Benign (Predicted)  - false negative (a missed cancer, the worst error here)
+# Scenario 3: Benign (Observed) x Malign (Predicted)  - false positive
+# Scenario 4: Malign (Observed) x Malign (Predicted)  - true positive
 
 # Reading the Confusion Matrix (Perspective of having or not having the disease):
 
-# True Negative = our model predicted that the person did NOT have the disease and the data showed that the person did NOT have the disease
-# False Positive = our model predicted the person had the disease and the data showed NO, the person had the disease
-# False Negative = our model predicted that the person did NOT have the disease and the data showed that YES, the person had the disease
-# True Positive = our model predicted that the person had the disease and the data showed that YES, the person had the disease
+# True Negative = model predicted NO disease and the person did NOT have it
+# False Positive = model predicted disease but the person did NOT have it
+# False Negative = model predicted NO disease but the person DID have it
+# True Positive = model predicted disease and the person DID have it
 
 # False Positive - Type I Error
 # False Negative - Type II Error
-
-# Model hit rate: 98% (hit 98 out of 100)
+# In a cancer screening setting, a False Negative (missed Malign tumor) is the
+# most costly error, so it should be reported, not hidden behind a single accuracy number.
 
 
 ## Step 5: Optimizing Model Performance
 
-# Using the scale() function to standardize the z-score
-## obs: the function of R "scale" is the normalization
+# Using the scale() function to standardize the data (z-score)
+## obs: R's scale() performs z-score standardization (subtract mean, divide by sd), not normalization.
 
-?scale()
 data_z <- as.data.frame(scale(data[-1]))
 
 # Confirming successful transformation
 summary(data_z$area_mean)
 
 # Creating new training and testing datasets
-sample_df <- sample(c(TRUE, FALSE), nrow(data_norm),replace = TRUE, prob = c(0.7, 0.3))
+set.seed(42)
+sample_df <- sample(c(TRUE, FALSE), nrow(data_z),replace = TRUE, prob = c(0.7, 0.3))
 
 training_data <- data_z[sample_df,]
 test_data <- data_z[!sample_df,]
@@ -163,9 +167,9 @@ data$diagnosis <- factor(data$diagnosis)
 data$id = NULL
 
 ## Create column to separate training and test data
-## The creation of this index is random. That is, each time we run this code, the index changes, and therefore, the training and test data, too.
+## The split index is random; set.seed keeps it reproducible across runs.
+set.seed(42)
 data[,'index'] <- ifelse(runif(nrow(data)) < 0.7,1,0)
-View(data)
 
 # training and testing date
 trainset <- data[data$index==1,]
@@ -213,16 +217,18 @@ mean(pred_test == testset$diagnosis)
 table(pred_test, testset$diagnosis)
 
 
-# Step 7: Building a model with Random Forest Algorithm
+# Step 7: Building a model with a Decision Tree (rpart / CART)
+# Note: this is a single CART decision tree from the rpart package, not a random forest.
+# A random forest would require an ensemble package such as randomForest or ranger.
 
 # Creating the model
 library(rpart)
-model_rf_v1 = rpart(diagnosis ~ ., 
-                    data = trainset, 
+model_tree_v1 = rpart(diagnosis ~ .,
+                    data = trainset,
                     control = rpart.control(cp = .0005))
 
 # Forecasts on test date
-tree_pred = predict(model_rf_v1, testset, type='class')
+tree_pred = predict(model_tree_v1, testset, type='class')
 
 # Percentage of correct predictions with test dataset
 mean(tree_pred==testset$diagnosis)
