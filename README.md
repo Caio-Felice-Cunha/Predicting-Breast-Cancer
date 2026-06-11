@@ -11,7 +11,7 @@ Predicting Breast Cancer Occurrence with Machine Learning in R
 ## Business Problem
 > Data was collected from [here](http://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Diagnostic%29)
 
-The main objetive here is trying to predicti Breast Cancer Occurrence with Machine Learning in R.
+The main objective here is to predict breast cancer occurrence with machine learning in R.
 
 ## Solution Strategy
 For that, I used RStudio.
